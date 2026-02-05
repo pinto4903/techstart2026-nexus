@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,18 +37,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.ui.drawer.drawerItems
+import com.example.myapplication.ui.history.HistoryScreen
+import com.example.myapplication.ui.payment.ManualCloseScreen
+import com.example.myapplication.ui.payment.PaymentScreen
+import com.example.myapplication.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Preview(showBackground = true)
-fun MainScreen() {
+fun MainAppLayout() {
+    // This navController manages screens INSIDE the drawer (Payment, Settings, etc.)
+    val subNavController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
+
+    val navBackStackEntry by subNavController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: "payment"
 
     val categorizedItems = remember {
         mapOf(
@@ -57,80 +69,56 @@ fun MainScreen() {
     }
 
     val expandedStates = remember {
-        mutableStateMapOf(
-            "Payment" to true,
-            "History" to false,
-            "Settings" to false
-        )
+        mutableStateMapOf("Payment" to true, "History" to false, "Settings" to false)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Payment") },
+                title = { Text(currentRoute.replace("_", " ").uppercase()) },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        scope.launch {
-                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                            }
+                        }) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
                         }
-                    }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
                     }
                 }
             )
         }
     ) { innerPadding ->
-
         ModalNavigationDrawer(
             modifier = Modifier.padding(innerPadding),
             drawerState = drawerState,
             drawerContent = {
-                ModalDrawerSheet(
-                    drawerShape = RectangleShape,
-                    windowInsets = WindowInsets(0, 0, 0, 0)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .verticalScroll(scrollState)
-                            .padding(16.dp)
-                    ) {
-
+                ModalDrawerSheet(drawerShape = RectangleShape, windowInsets = WindowInsets(0,0,0,0)) {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
                         categorizedItems.forEach { (categoryName, items) ->
                             val isExpanded = expandedStates[categoryName] == true
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        expandedStates[categoryName] = !isExpanded
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = categoryName,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Icon(
-                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                            // Category Header
+                            CategoryHeader(categoryName, isExpanded) {
+                                expandedStates[categoryName] = !isExpanded
                             }
 
                             AnimatedVisibility(visible = isExpanded) {
                                 Column {
                                     items.forEach { item ->
+                                        val route = item.title.lowercase().replace(" ", "_")
                                         NavigationDrawerItem(
                                             label = { Text(item.title) },
                                             icon = { Icon(item.icon, contentDescription = null) },
-                                            selected = false,
+                                            selected = currentRoute == route,
                                             onClick = {
                                                 scope.launch { drawerState.close() }
-                                                // Handle navigation here
+                                                subNavController.navigate(route) {
+                                                    popUpTo("payment") { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
                                             },
                                             modifier = Modifier.padding(vertical = 2.dp)
                                         )
@@ -143,10 +131,39 @@ fun MainScreen() {
                 }
             }
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Welcome to your SoftPOS solution!")
-                Text("Open the menu to see the grouped options.")
+            // Internal Navigation for Drawer Items
+            NavHost(
+                navController = subNavController,
+                startDestination = "payment",
+                modifier = Modifier.fillMaxSize().padding(16.dp)
+            ) {
+                // Payment screens
+                composable("payment") { PaymentScreen() }
+                composable("manual_close") { ManualCloseScreen() }
+
+                // History screens
+                composable("history") { HistoryScreen() }
+                // TODO: add remaining screens
+
+                // Settings screens
+                composable("settings") { SettingsScreen() }
+                // TODO: add remaining screens
             }
         }
+    }
+}
+
+@Composable
+fun CategoryHeader(title: String, isExpanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Icon(imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null)
     }
 }
