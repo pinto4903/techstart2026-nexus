@@ -1,4 +1,3 @@
-
 package com.example.myapplication.ui.login
 
 import androidx.compose.foundation.Image
@@ -24,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.myapplication.R
 
 @Composable
@@ -34,38 +34,54 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(24.dp), // Increased padding for a more modern look
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // --- UPDATED LOGO SECTION ---
         Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = "Logo",
-            modifier = Modifier.size(120.dp)
+            // Use the name you gave the file in the drawable folder
+            painter = painterResource(id = R.drawable.logo),
+            contentDescription = "SoftPOS Logo",
+            modifier = Modifier.size(180.dp) // Slightly larger for better branding visibility
         )
-        Spacer(modifier = Modifier.height(48.dp))
+        // ----------------------------
+
+        Spacer(modifier = Modifier.height(40.dp))
+
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
             label = { Text("Username") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
+
         Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
+
         Spacer(modifier = Modifier.height(32.dp))
+
         Button(
             onClick = { onLoginSuccess() },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp), // Thicker button for better touch target
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
         ) {
-            Text("Login")
+            Text("Login", fontSize = 18.sp)
         }
+
         Spacer(modifier = Modifier.height(16.dp))
+
         TextButton(onClick = { /* Handle registration */ }) {
             Text("Don't have an account? Register")
         }

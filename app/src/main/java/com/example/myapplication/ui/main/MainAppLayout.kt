@@ -38,14 +38,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.myapplication.ui.PaymentViewModel
 import com.example.myapplication.ui.drawer.drawerItems
+import com.example.myapplication.ui.history.HistoryRoute
 import com.example.myapplication.ui.history.HistoryScreen
+import com.example.myapplication.ui.payment.ManualCloseRoute
 import com.example.myapplication.ui.payment.ManualCloseScreen
+import com.example.myapplication.ui.payment.PaymentRoute
 import com.example.myapplication.ui.payment.PaymentScreen
+import com.example.myapplication.ui.settings.SettingsRoute
 import com.example.myapplication.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
@@ -54,11 +60,12 @@ import kotlinx.coroutines.launch
 fun MainAppLayout() {
     // This navController manages screens INSIDE the drawer (Payment, Settings, etc.)
     val subNavController = rememberNavController()
+    val viewModel: PaymentViewModel = viewModel()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     val navBackStackEntry by subNavController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: "payment"
+    val currentRoute = navBackStackEntry?.destination?.route ?: PaymentRoute
 
     val categorizedItems = remember {
         mapOf(
@@ -115,7 +122,7 @@ fun MainAppLayout() {
                                             onClick = {
                                                 scope.launch { drawerState.close() }
                                                 subNavController.navigate(route) {
-                                                    popUpTo("payment") { saveState = true }
+                                                    popUpTo(PaymentRoute) { saveState = true }
                                                     launchSingleTop = true
                                                     restoreState = true
                                                 }
@@ -134,19 +141,23 @@ fun MainAppLayout() {
             // Internal Navigation for Drawer Items
             NavHost(
                 navController = subNavController,
-                startDestination = "payment",
+                startDestination = PaymentRoute,
                 modifier = Modifier.fillMaxSize().padding(16.dp)
             ) {
                 // Payment screens
-                composable("payment") { PaymentScreen() }
-                composable("manual_close") { ManualCloseScreen() }
+                composable(PaymentRoute) {
+                    PaymentScreen(selectedCurrency = viewModel.selectedCurrency)
+                }
+                composable(ManualCloseRoute) { ManualCloseScreen() }
 
                 // History screens
-                composable("history") { HistoryScreen() }
+                composable(HistoryRoute) { HistoryScreen() }
                 // TODO: add remaining screens
 
                 // Settings screens
-                composable("settings") { SettingsScreen() }
+                composable(SettingsRoute) {
+                    SettingsScreen(viewModel = viewModel)
+                }
                 // TODO: add remaining screens
             }
         }
