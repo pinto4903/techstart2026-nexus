@@ -39,18 +39,26 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.myapplication.ui.PaymentViewModel
 import com.example.myapplication.ui.drawer.drawerItems
 import com.example.myapplication.ui.history.HistoryRoute
 import com.example.myapplication.ui.history.HistoryScreen
 import com.example.myapplication.ui.payment.ManualCloseRoute
 import com.example.myapplication.ui.payment.ManualCloseScreen
+import com.example.myapplication.ui.payment.PaymentLoadingRoute
+import com.example.myapplication.ui.payment.PaymentLoadingScreen
+import com.example.myapplication.ui.payment.PaymentQRRoute
+import com.example.myapplication.ui.payment.PaymentQRScreen
 import com.example.myapplication.ui.payment.PaymentRoute
 import com.example.myapplication.ui.payment.PaymentScreen
+import com.example.myapplication.ui.payment.PaymentSuccessRoute
+import com.example.myapplication.ui.payment.PaymentSuccessScreen
 import com.example.myapplication.ui.settings.SettingsRoute
 import com.example.myapplication.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
@@ -79,27 +87,27 @@ fun MainAppLayout() {
         mutableStateMapOf("Payment" to true, "History" to false, "Settings" to false)
     }
 
+    // Logic to determine if we show the TopBar (Hide it on Loading and QR screens)
+    val isPaymentProcess = currentRoute.startsWith("payment_loading") || currentRoute.startsWith("payment_qr")
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(currentRoute.replace("_", " ").uppercase()) },
-                navigationIcon = {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                        IconButton(onClick = {
-                            scope.launch {
-                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                            }
-                        }) {
+            if (!isPaymentProcess) {
+                TopAppBar(
+                    title = { Text(currentRoute.replace("_", " ").uppercase()) },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menu")
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         ModalNavigationDrawer(
             modifier = Modifier.padding(innerPadding),
             drawerState = drawerState,
+            gesturesEnabled = !isPaymentProcess, // Disable drawer swipe during payment
             drawerContent = {
                 ModalDrawerSheet(drawerShape = RectangleShape, windowInsets = WindowInsets(0,0,0,0)) {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -138,27 +146,68 @@ fun MainAppLayout() {
                 }
             }
         ) {
-            // Internal Navigation for Drawer Items
+            // Internal Navigation for Drawer Items and Payment Flow
             NavHost(
                 navController = subNavController,
                 startDestination = PaymentRoute,
-                modifier = Modifier.fillMaxSize().padding(16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Payment screens
+                // 1. Initial Payment Keypad
                 composable(PaymentRoute) {
-                    PaymentScreen(selectedCurrency = viewModel.selectedCurrency)
+                    PaymentScreen(
+                        viewModel = viewModel, // Updated to pass ViewModel instead of selectedCurrency
+                        onPay = { amount ->
+                            subNavController.navigate("payment_loading/$amount")
+                        }
+                    )
                 }
+
+                // 2. Intermediate Loading Screen (5 seconds)
+                composable(
+                    route = PaymentLoadingRoute,
+                    arguments = listOf(navArgument("amount") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val amount = backStackEntry.arguments?.getLong("amount") ?: 0L
+                    PaymentLoadingScreen(onTimeout = {
+                        subNavController.navigate("payment_qr/$amount") {
+                            // Pop up to PaymentRoute to remove the loading screen from history
+                            popUpTo(PaymentRoute)
+                        }
+                    })
+                }
+
+                // 3. Final QR Payment Screen
+                composable(
+                    route = PaymentQRRoute,
+                    arguments = listOf(navArgument("amount") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val amount = backStackEntry.arguments?.getLong("amount") ?: 0L
+                    PaymentQRScreen(
+                        amount = amount,
+                        onCancel = {
+                            subNavController.popBackStack(PaymentRoute, inclusive = false)
+                        },
+                        viewModel = viewModel,
+                        onTimeout = {
+                            subNavController.navigate(PaymentSuccessRoute) {
+                                popUpTo(PaymentRoute) { inclusive = false }
+                            }
+                        }
+                    )
+                }
+
+                composable(PaymentSuccessRoute) {
+                    PaymentSuccessScreen(onDone = {
+                        subNavController.popBackStack(PaymentRoute, false)
+                    })
+                }
+
+                // Other Drawer Routes
                 composable(ManualCloseRoute) { ManualCloseScreen() }
-
-                // History screens
                 composable(HistoryRoute) { HistoryScreen() }
-                // TODO: add remaining screens
-
-                // Settings screens
                 composable(SettingsRoute) {
                     SettingsScreen(viewModel = viewModel)
                 }
-                // TODO: add remaining screens
             }
         }
     }
@@ -174,7 +223,15 @@ fun CategoryHeader(title: String, isExpanded: Boolean, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Icon(imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Icon(
+            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null
+        )
     }
 }

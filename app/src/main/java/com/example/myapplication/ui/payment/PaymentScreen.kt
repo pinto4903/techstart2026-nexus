@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,8 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,16 +35,19 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.ui.PaymentViewModel
 import java.util.Locale
 
-// 1. Keep your route constant for the NavHost
 const val PaymentRoute = "payment"
+const val PaymentLoadingRoute = "payment_loading/{amount}"
+const val PaymentQRRoute = "payment_qr/{amount}"
 
 data class Currency(val code: String, val name: String, val symbol: String)
 
 @Composable
-fun PaymentScreen(selectedCurrency: Currency, onPay: (Long) -> Unit = {}) {
+fun PaymentScreen(viewModel: PaymentViewModel, onPay: (Long) -> Unit = {}) {
     var amountCents by remember { mutableLongStateOf(0L) }
+    var expanded by remember { mutableStateOf(false) }
 
     fun appendDigits(digits: String) {
         val asString = amountCents.toString()
@@ -50,10 +59,15 @@ fun PaymentScreen(selectedCurrency: Currency, onPay: (Long) -> Unit = {}) {
         amountCents /= 10
     }
 
+    // Logic updated to use ViewModel conversion
     fun formatAmountDisplay(cents: Long, locale: Locale): String {
-        val units = cents / 100
-        val rem = (cents % 100).toInt()
-        return String.format(locale, "%d,%02d", units, rem)
+        val rates = mapOf(
+            "EUR" to 0.2412, "USD" to 0.25, "GBP" to 0.20,
+            "JPY" to 37.50, "CHF" to 0.22, "BRL" to 1.25, "PLN" to 1.0
+        )
+        val rate = rates[viewModel.selectedCurrency.code] ?: 1.0
+        val convertedValue = (cents / 100.0) * rate
+        return String.format(locale, "%.2f", convertedValue)
     }
 
     Column(
@@ -70,7 +84,7 @@ fun PaymentScreen(selectedCurrency: Currency, onPay: (Long) -> Unit = {}) {
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = selectedCurrency.symbol, // Now dynamic from Settings!
+                    text = viewModel.selectedCurrency.symbol,
                     fontSize = 45.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(end = 15.dp),
@@ -83,9 +97,50 @@ fun PaymentScreen(selectedCurrency: Currency, onPay: (Long) -> Unit = {}) {
                     color = Color.Black
                 )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // DCC DROPDOWN BUTTON
+            // Wrap in a Column that fills the width and centers its children
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Pay in your local currency?",
+                    color = Color(0xFF1F51FF), // High-visibility Electric Blue
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+
+                Box(contentAlignment = Alignment.TopCenter) {
+                    OutlinedButton(
+                        onClick = { expanded = true },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text(text = viewModel.selectedCurrency.code)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    }
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        viewModel.currencies.filter { it != viewModel.selectedCurrency }.forEach { currency ->
+                            DropdownMenuItem(
+                                text = { Text("${currency.name} (${currency.code})") },
+                                onClick = {
+                                    viewModel.updateCurrency(currency)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        // Keypad Block
         Column(modifier = Modifier.fillMaxWidth()) {
             @Composable
             fun KeyRow(vararg labels: String) {
@@ -110,11 +165,9 @@ fun PaymentScreen(selectedCurrency: Currency, onPay: (Long) -> Unit = {}) {
             KeyRow("00", "0", "X")
 
             Button(
-                onClick = { onPay(amountCents) },
-                shape = RectangleShape, // Flush with the bottom of the screen
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
+                onClick = { if (amountCents > 0) onPay(amountCents) },
+                shape = RectangleShape,
+                modifier = Modifier.fillMaxWidth().height(72.dp)
             ) {
                 Text(text = "PAY", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
@@ -129,13 +182,10 @@ fun KeyButton(label: String, onClick: () -> Unit) {
         color = Color.White,
         border = BorderStroke(0.2.dp, Color.LightGray),
         shape = RectangleShape,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp)
+        modifier = Modifier.fillMaxWidth().height(80.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (label == "X") {
-                // Render the Backspace Icon instead of text
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Backspace,
                     contentDescription = "Backspace",
@@ -143,13 +193,7 @@ fun KeyButton(label: String, onClick: () -> Unit) {
                     modifier = Modifier.size(28.dp)
                 )
             } else {
-                // Render the number or "00"
-                Text(
-                    text = label,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color.Black
-                )
+                Text(text = label, fontSize = 26.sp, color = Color.Black)
             }
         }
     }
