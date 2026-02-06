@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
-const val ManualCloseScreen = "manual_close"
+const val ManualCloseRoute = "manual_close"
 
 @Composable
 fun ManualCloseScreen() {
